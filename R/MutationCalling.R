@@ -18,21 +18,22 @@
 #'
 #'
 #'
-MutationCalling = function(out = "/path_to_filtered_fastqs/",
-						   barcodes.file.path = "/path_to_singlecell.csv",
-                           wt.max.mismatch = 0,
-                           mut.max.mismatch = 0,
-                           keep.raw.reads = F,
-                           ncores = 1,
-                           reverse.complement = T,
-                           testing = F,
-                           which.read = "R1",
-                           primer.sequence = "CCTCATCATCCTCCTTGTC",
-                           primed.max.mismatch = 3,
-                           wt.sequence =  "CGG",
-                           mut.sequence = "CAG",
-                           mutation.start = 31,
-                           mutation.end = 34
+MutationCalling = function(
+    out = "/path_to_filtered_fastqs/",
+    barcodes.file.path = "/path_to_singlecell.csv",
+    wt.max.mismatch = 0,
+    mut.max.mismatch = 0,
+    keep.raw.reads = F,
+    ncores = 1,
+    reverse.complement = T,
+    testing = F,
+    which.read = "R1",
+    primer.sequence = "CCTCATCATCCTCCTTGTC",
+    primed.max.mismatch = 3,
+    wt.sequence =  "CGG",
+    mut.sequence = "CAG",
+    mutation.start = 31,
+    mutation.end = 34
 ){
 
   options(expressions = 2.5e5) # Increase the number of nested expressions to be evaluated. Limit is 5e5.
@@ -118,13 +119,11 @@ MutationCalling = function(out = "/path_to_filtered_fastqs/",
   if (length(names(whitelist)) == 1){
 	 whitelist = read.csv(barcodes.file.path, header=F)
      whitelist=as.vector(whitelist)$V1
-  }
-  else {
+  } else {
   whitelist$barcode = substr(whitelist$barcode, 1,16)
   whitelist = as.character(whitelist[-1,1])
   }
   message("------- BARCODES IDENTIFIED -------")
-
 
   # Match primed barcodes to whitelist
   if(reverse.complement){
@@ -137,38 +136,18 @@ MutationCalling = function(out = "/path_to_filtered_fastqs/",
   }
 
   message("------- BARCODE MATCHING BEGINNING -------")
-  Matched.output = lapply(Primed.output, function(y){
-    y$WhiteListMatch = unlist(mclapply(y$CB, function(x){
-      temp = stringdist(x, whitelist, method = "hamming")
-      if(min(temp) > 2){
-        temp = "No Match"
-      }else{
-        if(sum(temp == 0) == 1) {
-          temp = whitelist[temp==0]
-        }else{
-          if(sum(temp == 1) == 1){
-            temp = whitelist[temp==1]
-          }else{
-            if(sum(temp == 2) == 1){
-              temp = whitelist[temp==2]
-            }else{
-              temp = "Too many matches"
-            }
-          }
-        }
-      }
-      return(temp)
-    }, mc.cores = ncores))
-    return(y)
+  Matched.output = lapply(Primed.output, function(x){
+    MatchBarcodes(
+      x = x,
+      WhiteList = whitelist, 
+      max_dist = 1, 
+      ncores = ncores
+    )
   })
-
-  pre_match_barcodes = nrow(Primed.output[[1]])
-  no_match_barcodes = nrow(Matched.output[[1]][Matched.output[[1]]$WhiteListMatch == "No Match",])
-  too_many_match_barcodes = nrow(Matched.output[[1]][Matched.output[[1]]$WhiteListMatch == "Too many matches",])
-  Matched.output = lapply(Matched.output, function(x) x[!(x$WhiteListMatch %in% c("No Match","Too many matches")),])
   names(Matched.output) = names(primed.index)
-  post_match_barcodes = nrow(Matched.output[[1]])
-
+    
+  pre_match_barcodes = nrow(Primed.output[[1]])
+  post_match_barcodes = sum(!is.na(Matched.output[[1]]$WhiteListMatch))
 
   message("------- BARCODE MATCHING DONE -------")
   message("total number of primed barcodes = ", pre_match_barcodes)

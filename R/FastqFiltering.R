@@ -52,7 +52,7 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
   selected.chunk.index = chunk.index[grep(fastq.files, pattern = which.read)]
 
   message("------- FASTQ FILES IDENTIFIED -------")
-
+  
   # Generate index for each read in each fastq file - boolean for whether a read passes minimum quality / minimum bases
   index = mclapply(selected.files, function(x){
     temp = readFastq(dirPath = out, pattern = x)
@@ -63,42 +63,30 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
     rowSums(q <= min.quality) < min.bases
   }, mc.cores = ncores)
   names(index) = selected.chunk.index
-
+  
   message("------- PER READ INDEX CREATED -------")
 
-  # read in unfiltered fastq files
-  orig.files = mclapply(fastq.files, function(x){
-    temp = readFastq(dirPath = out, pattern = x)
-  }, mc.cores = ncores)
-  names(orig.files) = unlist(fastq.files)
-
-  message("------- RAW FASTQ FILES LOADED -------")
-
-  # apply index to generate filtered fastq files
-  filter.files = mclapply(names(orig.files), function(x){
-    c.ind = unlist(lapply(strsplit(x, "_"), function(y) y[2]))
-    orig.files[[x]][index[[c.ind]]]
-  }, mc.cores = ncores)
-  names(filter.files) = names(orig.files)
-  message("------- FILTERING COMPLETE -------")
-
-  system(paste0('mkdir ',out,"Filtered/"))
-
   mclapply(unique(chunk.index), function(x){
-    system(paste0('mkdir ', out,"Filtered/",x))
+    system(paste0('mkdir -p ', out,"Filtered/",x))
   }, mc.cores = ncores)
-
-  # write out filtered fastq files
-  mclapply(unique(chunk.index), function(x) {
-    selected = grep(names(filter.files), pattern = paste0("_", x,"_"), value = T)
-    lapply(selected, function(y){
-      writeFastq(object = filter.files[[y]], file = paste0(out,"Filtered/",x,"/filtered_bq",min.quality,"_bn",min.bases,"_",y), mode = "a")
-    })
-  }, mc.cores = ncores)
-
+  
+  # filter fastq files
+  metrics.data.frame = Reduce(rbind, mclapply(fastq.files, function(x){
+    temp = readFastq(dirPath = out, pattern = x)
+    before.filtering = length(temp)
+    c.ind = unlist(lapply(strsplit(x, "_"), function(y) y[2]))
+    temp = temp[index[[c.ind]]]
+    after.filtering = length(temp)
+    metrics.data.frame = data.frame(before.filtering = before.filtering, after.filtering = after.filtering)
+    writeFastq(object = temp, file = paste0(out,"Filtered/",c.ind,"/filtered_bq",min.quality,"_bn",min.bases,"_",x), mode = "a")
+    return(metrics.data.frame)
+  }, mc.cores = ncores))
+  
+  message("------- FILTERING COMPLETE -------")
   message("------- FASTQ FILTERING METRICS -------")
-  message("------- mean number of filtered reads = ", mean(unlist(lapply(filter.files, length))))
-  message("------- % of remaining reads after filtering= ", round(mean(unlist(lapply(filter.files, length))/length(orig.files[[1]])*100),3)," +/- ", round(sd(unlist(lapply(filter.files, length))/length(orig.files[[1]])*100),3)," (mean +/- sd)")
+  message("------- mean number of filtered reads = ", mean(metrics.data.frame$after.filtering))
+  message("------- % of remaining reads after filtering= ", round(mean(metrics.data.frame$after.filtering/metrics.data.frame$before.filtering*100),3),
+          " +/- ", round(sd(metrics.data.frame$after.filtering/metrics.data.frame$before.filtering*100),3)," (mean +/- sd)")
   message("------- FASTQ FILTERING FUNCTION COMPLETE -------")
   
 }
