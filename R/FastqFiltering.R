@@ -67,6 +67,7 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
   message("------- PER READ INDEX CREATED -------")
 
   mclapply(unique(chunk.index), function(x){
+    unlink(paste0(out,"Filtered/",x), recursive = TRUE)
     system(paste0('mkdir -p ', out,"Filtered/",x))
   }, mc.cores = ncores)
   
@@ -78,7 +79,7 @@ FastqFiltering = function(path, out="/path_to_fastqs/",
     temp = temp[index[[c.ind]]]
     after.filtering = length(temp)
     metrics.data.frame = data.frame(before.filtering = before.filtering, after.filtering = after.filtering)
-    writeFastq(object = temp, file = paste0(out,"Filtered/",c.ind,"/filtered_bq",min.quality,"_bn",min.bases,"_",x), mode = "a")
+    writeFastq(object = temp, file = paste0(out,"Filtered/",c.ind,"/filtered_bq",min.quality,"_bn",min.bases,"_",x), mode = "w")
     return(metrics.data.frame)
   }, mc.cores = ncores))
   
